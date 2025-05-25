@@ -1,19 +1,20 @@
-import torch
-import torch.nn as nn
-import torch.optim as optim
-from torch.optim.lr_scheduler import CosineAnnealingLR
-import torch.nn.functional as F
-import wandb
-from torch.utils.data import DataLoader, random_split
-from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence, pad_packed_sequence
 import os
 
-from src.dataset import ComposerDataset
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import torch.optim as optim
+import wandb
 from sklearn.metrics import accuracy_score
+from torch.nn.utils.rnn import (pack_padded_sequence, pad_packed_sequence,
+                                pad_sequence)
+from torch.optim.lr_scheduler import CosineAnnealingLR
+from torch.utils.data import DataLoader, random_split
+
+from src.dataset import ComposerDataset
 from src.model import ComposerClassifier
 
-
-DATASET_PATH = "/home/mrozek/ssne-2025l/composer-rnn-classifier/data/train.pkl"
+DATASET_PATH = "/home/bilski/uni_repos/composer-rnn-classifier/train.pkl"
 VAL_SPLIT_RATIO = 0.1
 LEARNING_RATE = 1e-4
 EPOCHS = 200
@@ -24,7 +25,7 @@ NUM_LSTM_LAYERS = 1
 DROPOUT_RATE = 0.0
 FC_LAYERS = [128, 64]
 MODEL_SAVE_PATH = (
-    "/home/mrozek/ssne-2025l/composer-rnn-classifier/model/last_saved_model.pkl"
+    "/home/mrozek/ssne-2025l/composer-rnn-classifier/last_saved_model.pkl"
 )
 SAVE_EVERY_N_EPOCHS = 5
 
@@ -32,16 +33,21 @@ SAVE_EVERY_N_EPOCHS = 5
 def pad_collate_fn(batch):
     if len(batch[0]) == 2:
         sequences, labels = zip(*batch)
-
-        sequences_padded = pad_sequence(sequences, batch_first=True, padding_value=0)
+        sequence_lengths = [len(s) for s in sequences]
+        sequences_padded = pad_sequence(sequences,
+                                        batch_first=True,
+                                        padding_value=0)
         labels = torch.stack(labels)
 
-        return sequences_padded, labels
+        return sequences_padded, labels, sequence_lengths
     else:
         sequences = batch
-        sequences_padded = pad_sequence(sequences, batch_first=True, padding_value=0)
+        sequence_lengths = [len(s) for s in sequences]
+        sequences_padded = pad_sequence(sequences,
+                                        batch_first=True,
+                                        padding_value=0)
 
-        return sequences_padded
+        return sequences_padded, sequence_lengths
 
 
 def main():
@@ -66,7 +72,8 @@ def main():
     val_size = int(VAL_SPLIT_RATIO * dataset_size)
     train_size = dataset_size - val_size
 
-    train_dataset, val_dataset = random_split(full_dataset, [train_size, val_size])
+    train_dataset, val_dataset = random_split(
+        full_dataset, [train_size, val_size])
 
     train_loader = DataLoader(
         train_dataset,
@@ -85,11 +92,13 @@ def main():
     )
 
     print(
-        f"Loaded dataset from {DATASET_PATH}. Train size: {train_size}, Val size: {val_size}"
+        f"Loaded dataset from {DATASET_PATH}"
+        f"Train size: {train_size}"
+        f"Val size: {val_size}"
     )
 
     model = ComposerClassifier(
-        vocab_size=full_dataset.get_vocab_size(),
+        vocab_size=full_dataset.vocab_size,
         embed_dim=EMBEDDING_DIM,
         num_lstm_layers=NUM_LSTM_LAYERS,
         hidden_dim=HIDDEN_DIM,
@@ -100,7 +109,7 @@ def main():
 
     optimizer = optim.AdamW(model.parameters(), lr=LEARNING_RATE)
     criterion = nn.CrossEntropyLoss()
-    scheduler = CosineAnnealingLR(optimizer, T_max=EPOCHS, eta_min=1e-6)  # Opcjonalnie
+    scheduler = CosineAnnealingLR(optimizer, T_max=EPOCHS, eta_min=1e-6)
 
     start_epoch = 0
     if os.path.exists(MODEL_SAVE_PATH):
@@ -125,12 +134,12 @@ def main():
         train_loss_total = 0.0
         train_predictions = []
         train_true_labels = []
-        for i, (sequences, labels) in enumerate(train_loader):
+        for i, (sequences, labels, seq_lengths) in enumerate(train_loader):
             optimizer.zero_grad()
             sequences = sequences.to(device)
             labels = labels.to(device)
 
-            outputs = model(sequences)
+            outputs = model(sequences, seq_lengths)
             loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
@@ -155,10 +164,10 @@ def main():
         val_true_labels = []
         val_loss_total = 0.0
         with torch.no_grad():
-            for sequences, labels in val_loader:
+            for sequences, labels, seq_lengths in val_loader:
                 sequences = sequences.to(device)
                 labels = labels.to(device)
-                outputs = model(sequences)
+                outputs = model(sequences, seq_lengths)
                 loss = criterion(outputs, labels)
 
                 val_loss_total += loss.item()
