@@ -1,4 +1,5 @@
 import os
+from collections import Counter
 
 import torch
 import torch.nn as nn
@@ -6,6 +7,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 import wandb
 from sklearn.metrics import accuracy_score
+from sklearn.model_selection import train_test_split
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence, pad_sequence
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import DataLoader, random_split
@@ -13,18 +15,19 @@ from torch.utils.data import DataLoader, random_split
 from src.dataset import ComposerDataset
 from src.model import ComposerClassifier
 
-DATASET_PATH = "/home/mrozek/ssne-2025l/composer-rnn-classifier/data/train.pkl"
-VAL_SPLIT_RATIO = 0.1
+DATASET_PATH = "/home/mbilski/dir/train.pkl"
+VAL_SPLIT_RATIO = 0.2
 LEARNING_RATE = 1e-4
-EPOCHS = 200
+EPOCHS = 150
 BATCH_SIZE = 32
 EMBEDDING_DIM = 128
 HIDDEN_DIM = 256
 NUM_LSTM_LAYERS = 1
-DROPOUT_RATE = 0.0
+DROPOUT_RATE = 0.1
+WEIGHT_DECAY_RATE = 1e-1
 FC_LAYERS = [128, 64]
 MODEL_SAVE_PATH = (
-    "/home/mrozek/ssne-2025l/composer-rnn-classifier/models/last_saved_model.pkl"
+    "/home/mbilski/dir/model.pkl"
 )
 SAVE_EVERY_N_EPOCHS = 5
 
@@ -66,8 +69,20 @@ def main():
     dataset_size = len(full_dataset)
     val_size = int(VAL_SPLIT_RATIO * dataset_size)
     train_size = dataset_size - val_size
+    
+    dataset_indices = list(range(len(full_dataset)))
+    all_labels = [full_dataset[i][1] for i in range(len(full_dataset))]
 
-    train_dataset, val_dataset = random_split(full_dataset, [train_size, val_size])
+    train_indices, val_indices = train_test_split(dataset_indices,
+                                                  test_size=VAL_SPLIT_RATIO,
+                                                  random_state=42,
+                                                  stratify=all_labels)
+
+    train_dataset = torch.utils.data.Subset(full_dataset, train_indices)
+    val_dataset = torch.utils.data.Subset(full_dataset, val_indices)
+
+    print("Train labels count:" + str(Counter([int(train_dataset[i][1]) for i in range(len(train_dataset))])))
+    print("Val labels count:" + str(Counter([int(val_dataset[i][1]) for i in range(len(val_dataset))])))
 
     train_loader = DataLoader(
         train_dataset,
@@ -101,7 +116,9 @@ def main():
         dropout=DROPOUT_RATE,
     ).to(device)
 
-    optimizer = optim.AdamW(model.parameters(), lr=LEARNING_RATE)
+    optimizer = optim.AdamW(model.parameters(),
+                            lr=LEARNING_RATE,
+                            weight_decay=WEIGHT_DECAY_RATE)
     criterion = nn.CrossEntropyLoss()
     scheduler = CosineAnnealingLR(optimizer, T_max=EPOCHS, eta_min=1e-6)
 
