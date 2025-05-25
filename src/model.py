@@ -15,8 +15,6 @@ class ComposerClassifier(nn.Module):
         super().__init__()
 
         self.embedding = nn.Embedding(vocab_size, embed_dim, padding_idx=0)
-        self.num_lstm_layers = num_lstm_layers
-
         self.lstm = nn.LSTM(
             input_size=embed_dim,
             hidden_size=hidden_dim,
@@ -24,7 +22,6 @@ class ComposerClassifier(nn.Module):
             batch_first=True,
             dropout=0.2 if num_lstm_layers > 1 else 0,
         )
-        input_dim = embed_dim
 
         self.fc_layers = nn.ModuleList()
         input_dim = hidden_dim
