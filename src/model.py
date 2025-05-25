@@ -1,4 +1,5 @@
 import torch.nn as nn
+from torch.nn.utils.rnn import pack_padded_sequence
 
 
 class ComposerClassifier(nn.Module):
@@ -23,7 +24,7 @@ class ComposerClassifier(nn.Module):
             dropout=0.2 if num_lstm_layers > 1 else 0,
         )
 
-        self.fc_layers = nn.ModuleList()
+        self.fc_layers = []
         input_dim = hidden_dim
 
         for fc_dim in fc_dims:
@@ -35,10 +36,15 @@ class ComposerClassifier(nn.Module):
         self.fc_layers.append(nn.Linear(input_dim, num_classes))
         self.classifier = nn.Sequential(*self.fc_layers)
 
-    def forward(self, x):
+    def forward(self, x, x_lens):
         embedded = self.embedding(x)
 
-        lstm_out, (hidden, cell) = self.lstm(embedded)
+        embedded_packed = pack_padded_sequence(embedded,
+                                               x_lens,
+                                               batch_first=True,
+                                               enforce_sorted=False)
+
+        lstm_out, (hidden, cell) = self.lstm(embedded_packed)
 
         output = self.classifier(hidden[-1])
 
