@@ -6,26 +6,25 @@ import torch.nn.functional as F
 import torch.optim as optim
 import wandb
 from sklearn.metrics import accuracy_score
-from torch.nn.utils.rnn import (pack_padded_sequence, pad_packed_sequence,
-                                pad_sequence)
+from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence, pad_sequence
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import DataLoader, random_split
 
 from src.dataset import ComposerDataset
 from src.model import ComposerClassifier
 
-DATASET_PATH = "/home/bilski/uni_repos/composer-rnn-classifier/train.pkl"
+DATASET_PATH = "/home/mrozek/ssne-2025l/composer-rnn-classifier/data/train.pkl"
 VAL_SPLIT_RATIO = 0.1
 LEARNING_RATE = 1e-4
 EPOCHS = 200
-BATCH_SIZE = 8
+BATCH_SIZE = 32
 EMBEDDING_DIM = 128
 HIDDEN_DIM = 256
 NUM_LSTM_LAYERS = 1
 DROPOUT_RATE = 0.0
 FC_LAYERS = [128, 64]
 MODEL_SAVE_PATH = (
-    "/home/mrozek/ssne-2025l/composer-rnn-classifier/last_saved_model.pkl"
+    "/home/mrozek/ssne-2025l/composer-rnn-classifier/models/last_saved_model.pkl"
 )
 SAVE_EVERY_N_EPOCHS = 5
 
@@ -34,18 +33,14 @@ def pad_collate_fn(batch):
     if len(batch[0]) == 2:
         sequences, labels = zip(*batch)
         sequence_lengths = [len(s) for s in sequences]
-        sequences_padded = pad_sequence(sequences,
-                                        batch_first=True,
-                                        padding_value=0)
+        sequences_padded = pad_sequence(sequences, batch_first=True, padding_value=0)
         labels = torch.stack(labels)
 
         return sequences_padded, labels, sequence_lengths
     else:
         sequences = batch
         sequence_lengths = [len(s) for s in sequences]
-        sequences_padded = pad_sequence(sequences,
-                                        batch_first=True,
-                                        padding_value=0)
+        sequences_padded = pad_sequence(sequences, batch_first=True, padding_value=0)
 
         return sequences_padded, sequence_lengths
 
@@ -72,8 +67,7 @@ def main():
     val_size = int(VAL_SPLIT_RATIO * dataset_size)
     train_size = dataset_size - val_size
 
-    train_dataset, val_dataset = random_split(
-        full_dataset, [train_size, val_size])
+    train_dataset, val_dataset = random_split(full_dataset, [train_size, val_size])
 
     train_loader = DataLoader(
         train_dataset,
@@ -180,7 +174,9 @@ def main():
 
         print(f"Epoch {epoch+1}/{EPOCHS}:")
         print(f"  Train Loss: {avg_train_loss_total:.4f})")
+        print(f"  Train Acc: {train_acc:.4f})")
         print(f"  Val Loss:   {avg_val_loss_total:.4f})")
+        print(f"  Val Acc: {val_acc:.4f})")
         log_dict = {
             "train/total_loss": avg_train_loss_total,
             "train/accuracy": train_acc,
