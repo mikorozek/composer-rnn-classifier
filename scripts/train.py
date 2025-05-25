@@ -5,13 +5,14 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-import wandb
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import train_test_split
-from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence, pad_sequence
+from torch.nn.utils.rnn import (pack_padded_sequence, pad_packed_sequence,
+                                pad_sequence)
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import DataLoader, random_split
 
+import wandb
 from src.dataset import ComposerDataset
 from src.model import ComposerClassifier
 
@@ -33,19 +34,13 @@ SAVE_EVERY_N_EPOCHS = 5
 
 
 def pad_collate_fn(batch):
-    if len(batch[0]) == 2:
-        sequences, labels = zip(*batch)
-        sequence_lengths = [len(s) for s in sequences]
-        sequences_padded = pad_sequence(sequences, batch_first=True, padding_value=0)
-        labels = torch.stack(labels)
+    sequences, labels = zip(*batch)
+    sequence_lengths = [len(s) for s in sequences]
+    sequences_padded = pad_sequence(sequences, batch_first=True, padding_value=0)
+    labels = torch.stack(labels)
 
-        return sequences_padded, labels, sequence_lengths
-    else:
-        sequences = batch
-        sequence_lengths = [len(s) for s in sequences]
-        sequences_padded = pad_sequence(sequences, batch_first=True, padding_value=0)
+    return sequences_padded, labels, sequence_lengths
 
-        return sequences_padded, sequence_lengths
 
 
 def main():
